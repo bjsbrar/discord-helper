@@ -56,7 +56,6 @@ Create a .env file and add the following to it:
 | Variable  | What it is     |
 | --------- | -------------- |
 | BOT_TOKEN | Your Bot Token |
-| --------- | -------------- |
 | BOT_ID | Your Bot ID |
 
 
@@ -71,6 +70,10 @@ Me or other people will take their time to answer and help you.
 ## Built With
 
 - [Python](https://www.python.org/)
+
+# How to Contribute
+
+Checkout [CONTRIBUTING.md](CONTRIBUTING.md) for details about how to contribute to the project.
 
 ## License
 
