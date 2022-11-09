@@ -46,7 +46,11 @@ pipenv shell
 Then run the following command in pipenv shell to run the bot.
 
 ```
-python3 messagescheduler.py
+./start.sh
+```
+or
+```
+./start.bat
 ```
 
 # How to set up
