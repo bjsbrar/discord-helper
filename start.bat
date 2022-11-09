@@ -1,2 +1,0 @@
-python3 MessageScheduler.py
-pause
