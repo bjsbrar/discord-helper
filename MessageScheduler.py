@@ -1,15 +1,122 @@
 import asyncio
 import discord
 import datetime
-from decouple import config
 import json
+from decouple import config
+import youtube_dl
+
 
 TOKEN = config("BOT_TOKEN")
 ID = int(config("BOT_ID"))
 client = discord.Client(intents=discord.Intents.all())
 
-commandlist = ["-help", '-list', '-schedule', '-delete', '-info', '-time']
+timeDict = {}
+commandQueue = []
 
+commandlist = ['-help', '-list', '-schedule', '-delete', '-info', '-time', '-play', '-pause', '-resume', '-skip', '-queue', '-stop']
+
+voice_clients = {}
+
+yt_dl_opts = {'format': 'bestaudio/best'}
+ytdl = youtube_dl.YoutubeDL(yt_dl_opts)
+
+ffmpeg_options = {'options': "-vn"}
+
+musicQueue = {}
+isPaused = {}
+
+async def enqueue(message, type):
+    if(type == 'new'):
+                if(message.guild.id in musicQueue.keys()):
+                    musicQueue[message.guild.id].append(message)
+                else:
+                    musicQueue[message.guild.id] = [message]
+                return("Enqueued")
+    elif(type == 'old'):
+        musicQueue[message.guild.id].insert(0, message)
+        return ''
+
+async def play(message, type):
+    try:
+        voice_client = await message.author.voice.channel.connect()
+        voice_clients[voice_client.guild.id] = voice_client
+        isPaused[voice_client.guild.id] = False
+    except:
+        print("error")
+
+    try:
+        url = message.content.split()[1]
+        loop = asyncio.get_event_loop()
+        extractedIinfo = ytdl.extract_info(url, download=False)
+        data = await loop.run_in_executor(None, lambda: extractedIinfo)
+        song = data['url']
+        player = discord.FFmpegPCMAudio(song, **ffmpeg_options)
+        if (not isPaused[message.guild.id]):
+            voice_clients[message.guild.id].play(player)
+            return 'Playing ' + str(extractedIinfo.get('title', None)) + ', **added by ' + str(message.author.nick) + '**'
+        else:
+            return await enqueue(message, type)
+
+    except Exception as err:
+        if(str(err) == 'Already playing audio.'):
+            return await enqueue(message, type)
+        elif('HTTP error 403 Forbidden' in str(err)):
+            print(err)
+            return await enqueue(message, type)
+        else:
+            print(err)
+
+async def queue(message):
+    try:
+        first = musicQueue[message.guild.id][0]
+        if len(musicQueue[message.guild.id]) == 0:
+            return('Queue Empty')
+        else:
+            index = 1
+            retval = ""
+            for song in musicQueue[message.guild.id]:
+                link = (song.content).split(' ')[1]
+                info_dict = ytdl.extract_info(link, download=False)
+                retval+=str(index) + ': ' + str(info_dict.get('title', None) +  ', **added by ' + str(song.author.nick)) + '**\n'
+                index += 1
+            return retval
+    except:
+        return
+        
+
+
+async def pause(message):
+    try:  
+        voice_clients[message.guild.id].pause()
+        isPaused[message.guild.id] = True
+        return('Paused')
+    except Exception as err:
+        print(err)
+
+async def resume(message):
+    try:
+        voice_clients[message.guild.id].resume()
+        isPaused[message.guild.id] = False
+        return('Resuming')
+    except Exception as err:
+        print(err)
+
+async def skip(message):
+    try:
+        voice_clients[message.guild.id].stop()
+        return('Skipping')
+    except Exception as err:
+        print(err)
+
+async def stop(message):
+    try:
+        voice_clients[message.guild.id].stop()
+        musicQueue[message.guild.id] = [message]
+        musicQueue.pop(0)
+        await voice_clients[message.guild.id].disconnect()
+        return('Stopped')
+    except Exception as err:
+        print(err)
 
 def isInteger(string):
     try:
@@ -201,12 +308,23 @@ async def parseCommand(message):
         await sendmessage(message.channel.id, info)
     elif (command.split(' ')[0] == '-time'):
         await sendmessage(message.channel.id, datetime.datetime.now().strftime('%d-%B-%Y %H:%M'))
+    elif (command.split(' ')[0] == '-play'):
+        await sendmessage(message.channel.id, await play(message, 'new'))
+    elif (command.split(' ')[0] == '-pause'):
+        await sendmessage(message.channel.id, await pause(message))
+    elif (command.split(' ')[0] == '-resume'):
+        await sendmessage(message.channel.id, await resume(message))
+    elif (command.split(' ')[0] == '-skip'):
+        await sendmessage(message.channel.id, await skip(message))
+    elif(command.split(' ')[0] == '-queue'):
+        await sendmessage(message.channel.id, await queue(message))
+    elif (command.split(' ')[0] == '-stop'):
+        print(message.channel)
+        await sendmessage(message.channel.id, await stop(message))
 
 
 def getScheduledTime():
     data = loadMessages()
-    global timeDict
-    timeDict = {}
     for serverid in data.keys():
         for userid in data[serverid].keys():
             index = 0
@@ -219,7 +337,6 @@ def getScheduledTime():
 
 
 async def sendScheduledMessage(timeInfo):
-    global commandQueue
     print('Sending Message')
     data = loadMessages()
     for messageInfo in timeInfo:
@@ -237,6 +354,7 @@ async def sendScheduledMessage(timeInfo):
 
 async def idle():
     global timeDict
+    global commandQueue
     getScheduledTime()
 
     while True:
@@ -250,6 +368,15 @@ async def idle():
                 await parseCommand(message)
             except:
                 await asyncio.sleep(1)
+            try:    
+                for guild in musicQueue.keys():
+                    try:    
+                        song = musicQueue[guild].pop(0)
+                        await play(song, 'old')
+                    except:
+                        await asyncio.sleep(1)
+            except:
+                await asyncio.sleep(1)
 
 
 @client.event
@@ -260,14 +387,15 @@ async def on_ready():
 @client.event
 async def on_message(message):
     global commandQueue
+    print(len(commandQueue))
     if (message.author.id != ID):
-        print(message.content)
+        print(message.content + ' in ' + str(client.get_channel(message.channel.id)))
         if ((str(message.content).split(' '))[0] in commandlist):
             try:
                 commandQueue.append(message)
             except:
                 commandQueue = [message]
-
+        
 
 client.run(TOKEN)
 
