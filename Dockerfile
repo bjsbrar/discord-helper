@@ -1,5 +1,12 @@
 FROM python:3.9-slim
 
+# Download latest listing of available packages:
+RUN apt-get -y update
+# Upgrade already installed packages:
+#RUN apt-get -y upgrade
+# Install ffmpeg:
+RUN apt-get -y install ffmpeg
+
 # Install & use pipenv
 COPY Pipfile Pipfile.lock ./
 RUN python -m pip install --upgrade pip

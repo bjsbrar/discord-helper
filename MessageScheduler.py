@@ -3,6 +3,7 @@ import discord
 import datetime
 import json
 from decouple import config
+import random
 import youtube_dl
 
 
@@ -53,7 +54,12 @@ async def play(message, type):
         player = discord.FFmpegPCMAudio(song, **ffmpeg_options)
         if (not isPaused[message.guild.id]):
             voice_clients[message.guild.id].play(player)
-            return 'Playing ' + str(extractedIinfo.get('title', None)) + ', **added by ' + str(message.author.nick) + '**'
+            title = extractedIinfo.get('title', None)
+            if(len(title) < 32):
+                await message.guild.me.edit(nick=title)
+            else:
+                await message.guild.me.edit(nick=title[0:31])
+            return 'Playing ' + str(title + ', **added by ' + (str(message.author.name) if str(message.author.nick) == 'None' else str(message.author.nick))) + '**'
         else:
             return await enqueue(message, type)
 
@@ -77,7 +83,7 @@ async def queue(message):
             for song in musicQueue[message.guild.id]:
                 link = (song.content).split(' ')[1]
                 info_dict = ytdl.extract_info(link, download=False)
-                retval+=str(index) + ': ' + str(info_dict.get('title', None) +  ', **added by ' + str(song.author.nick)) + '**\n'
+                retval+=str(index) + ': ' + str(info_dict.get('title', None)) +  ', **added by ' + (str(song.author.name) if str(song.author.nick) == 'None' else str(song.author.nick)) + '**\n'
                 index += 1
             return retval
     except:
@@ -112,8 +118,9 @@ async def stop(message):
     try:
         voice_clients[message.guild.id].stop()
         musicQueue[message.guild.id] = [message]
-        musicQueue.pop(0)
+        await message.guild.me.edit(nick='Helper')
         await voice_clients[message.guild.id].disconnect()
+        musicQueue[message.guild.id] = []
         return('Stopped')
     except Exception as err:
         print(err)
@@ -372,9 +379,9 @@ async def idle():
                 for guild in musicQueue.keys():
                     try:    
                         song = musicQueue[guild].pop(0)
-                        await play(song, 'old')
+                        await sendmessage(song.channel.id,await play(song, 'old'))
                     except:
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.1)
             except:
                 await asyncio.sleep(1)
 
@@ -387,9 +394,9 @@ async def on_ready():
 @client.event
 async def on_message(message):
     global commandQueue
-    print(len(commandQueue))
     if (message.author.id != ID):
-        print(message.content + ' in ' + str(client.get_channel(message.channel.id)))
+        print((str(message.author.name) if str(message.author.nick) == 'None' else str(message.author.nick)))
+        # print(message.content + ' in ' + str(client.get_channel(message.channel.id)))
         if ((str(message.content).split(' '))[0] in commandlist):
             try:
                 commandQueue.append(message)
