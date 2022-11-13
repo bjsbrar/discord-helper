@@ -395,8 +395,7 @@ async def on_ready():
 async def on_message(message):
     global commandQueue
     if (message.author.id != ID):
-        print((str(message.author.name) if str(message.author.nick) == 'None' else str(message.author.nick)))
-        # print(message.content + ' in ' + str(client.get_channel(message.channel.id)))
+        print(message.content + ' in ' + str(client.get_channel(message.channel.id)))
         if ((str(message.content).split(' '))[0] in commandlist):
             try:
                 commandQueue.append(message)
